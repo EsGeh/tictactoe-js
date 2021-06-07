@@ -5,23 +5,55 @@
  * Player2: user
  */
 
-let field = init_game(3,3);
-let container = document.querySelector("#game-container");
-pc_move( field );
-{
-	let game_state = calc_game_state( field );
-	draw_game(
-		container,
-		field,
-		game_state
-	);
+let g_game = {
+	field: init_game(3,3),
+	game_state: { type: "continue" },
+	round: 0
 }
+
+let container = document.querySelector("#game-container");
+pc_move( g_game );
+window.history.replaceState(
+	g_game,
+	"round: " + g_game.round,
+	"?round=" + g_game.round
+);
+draw_game(
+	container,
+	g_game
+);
+
+// event listeners:
 container.addEventListener(
 	"click",
 	function(event) {
-		player_click( event, field );
+		player_click( event, g_game );
 	}
 );
+window.onpopstate = function(event) {
+	let new_state = event.state;
+	/*
+	console.log( "loading game:" );
+	console.log( new_state );
+	*/
+	if( new_state != null ) {
+		g_game = new_state;
+		console.log( g_game );
+		draw_game( container, g_game );
+	}
+};
+
+function push_to_browser_history(game) {
+	/*
+	console.log( "pushing to history:" );
+	console.log( game );
+	*/
+	window.history.pushState(
+		game,
+		"round: " + game.round,
+		"?round=" + game.round
+	);
+}
 
 
 /*****************************/
@@ -48,74 +80,69 @@ function init_game(width, height) {
 
 function draw_game(
 	el,
-	field,
-	game_state
+	game
 ) {
-		let marks = [];
-		if( game_state.type == "victory" ) {
-			marks.push(
-				game_state.constellation
-			);
-		}
-		draw_field(
-			el,
-			field,
-			marks
+	let marks = [];
+	if( game.game_state.type == "victory" ) {
+		marks.push(
+			game.game_state.constellation
 		);
-		draw_game_over(
-			el,
-			field,
-			game_state
-		);
+	}
+	draw_field(
+		el,
+		game.field,
+		marks
+	);
+	draw_game_over(
+		el,
+		game.field,
+		game.game_state
+	);
 }
 
-function player_click( event, field) {
+function player_click( event, game) {
 	// if game over -> leave this function:
-	{
-		let game_state = calc_game_state(
-			field
-		);
-		if( game_state.type != "continue" ) {
-			return;
-		}
+	if( game.game_state.type != "continue" ) {
+		return;
 	}
 	// player 2 moves (human player):
 	{
 		let play_pos = screen_pos_to_game_pos(
-			field,
+			game.field,
 			event.target.width, event.target.height,
 			event.offsetX, event.offsetY
 		);
-		if( player_move( field, play_pos ) )
+		if( player_move( game, play_pos ) )
 			return;
-		let game_state = calc_game_state( field );
-		draw_game(
-			event.target,
-			field,
-			game_state
-		);
-		if( game_state.type != "continue" ) {
+		if( game.game_state.type != "continue" ) {
+			draw_game(
+				event.target,
+				game
+			);
 			return;
 		}
 	}
 	// player 1 moves (pc):
-	pc_move( field );
+	pc_move( game );
+	push_to_browser_history(
+		game
+	);
 	{
-		let game_state = calc_game_state( field );
 		draw_game(
 			event.target,
-			field,
-			game_state
+			game
 		);
 	}
 }
 
 function player_move(
-	field,
+	game,
 	play_pos
 ) {
-	if( field[ play_pos[0] ][ play_pos[1] ] == 0 ) {
-		field[ play_pos[0] ][ play_pos[1] ] = 2;
+	if( game.field[ play_pos[0] ][ play_pos[1] ] == 0 ) {
+		game.field[ play_pos[0] ][ play_pos[1] ] = 2;
+		game.game_state = calc_game_state( game.field );
+		game.round++;
 		return 0;
 	}
 	else {
@@ -123,11 +150,12 @@ function player_move(
 	}
 }
 
-function pc_move( field ) {
+function pc_move( game ) {
 	// 1. try to win:
+	let play_pos = null;
 	{
-		let play_pos = scan_lines(
-			field,
+		play_pos = scan_lines(
+			game.field,
 			function( line ) {
 				let player_1_counter = 0;
 				let player_2_counter = 0;
@@ -145,7 +173,7 @@ function pc_move( field ) {
 							return cell.value == 0;
 						}
 					);
-					return play_pos;
+					return play_pos.pos;
 				}
 				return 0;
 			},
@@ -153,15 +181,13 @@ function pc_move( field ) {
 		);
 		if( play_pos != null ) {
 			console.log("try to win");
-			field[ play_pos.pos[0] ][ play_pos.pos[1] ] = 1;
-			return;
 		}
 	}
 
 	// 2. prevent opponent from winning:
-	{
-		let play_pos = scan_lines(
-			field,
+	if( play_pos == null ) {
+		play_pos = scan_lines(
+			game.field,
 			function( line ) {
 				let player_1_counter = 0;
 				let player_2_counter = 0;
@@ -179,7 +205,7 @@ function pc_move( field ) {
 							return cell.value == 0;
 						}
 					);
-					return play_pos;
+					return play_pos.pos;
 				}
 				return 0;
 			},
@@ -187,50 +213,56 @@ function pc_move( field ) {
 		);
 		if( play_pos != null ) {
 			console.log("prevent opponent from winning!");
-			field[ play_pos.pos[0] ][ play_pos.pos[1] ] = 1;
-			return;
 		}
 	}
 
 	// 3. try to play in some corner:
-	let free_corners = [];
-	let occupied_corners = [];
-	if( field[0][0] == 0 ) {
-		free_corners.push( [0,0] );
+	if( play_pos == null ) {
+		let free_corners = [];
+		let occupied_corners = [];
+		if( game.field[0][0] == 0 ) {
+			free_corners.push( [0,0] );
+		}
+		else if( game.field[0][0] != 0 ) {
+			occupied_corners.push( [0,0] );
+		}
+		if( game.field[0][2] == 0 ) {
+			free_corners.push( [0,2] );
+		}
+		else if( game.field[0][2] != 0 ) {
+			occupied_corners.push( [0,2] );
+		}
+		if( game.field[2][0] == 0 ) {
+			free_corners.push( [2,0] );
+		}
+		else if( game.field[2][0] != 0 ) {
+			occupied_corners.push( [2,0] );
+		}
+		if( game.field[2][2] == 0 ) {
+			free_corners.push( [2,2] );
+		}
+		else if( game.field[2][2] != 0 ) {
+			occupied_corners.push( [2,2] );
+		}
+		// 3.1. play diagonal corner:
+		if( occupied_corners.length == 1 ) {
+			console.log("play diagonal corner");
+			play_pos = [ 2-occupied_corners[0][0], 2-occupied_corners[0][1] ];
+		}
+		// 3.2. play any corner:
+		else if( free_corners.length > 0 ) {
+			console.log("play in corner");
+			let r = Math.floor( Math.random() * free_corners.length );
+			let corner = free_corners[r];
+			play_pos = [ corner[0], corner[1] ];
+		}
 	}
-	else if( field[0][0] != 0 ) {
-		occupied_corners.push( [0,0] );
-	}
-	if( field[0][2] == 0 ) {
-		free_corners.push( [0,2] );
-	}
-	else if( field[0][2] != 0 ) {
-		occupied_corners.push( [0,2] );
-	}
-	if( field[2][0] == 0 ) {
-		free_corners.push( [2,0] );
-	}
-	else if( field[2][0] != 0 ) {
-		occupied_corners.push( [2,0] );
-	}
-	if( field[2][2] == 0 ) {
-		free_corners.push( [2,2] );
-	}
-	else if( field[2][2] != 0 ) {
-		occupied_corners.push( [2,2] );
-	}
-	// 3.1. play diagonal corner:
-	if( occupied_corners.length == 1 ) {
-		console.log("play diagonal corner");
-		field[ 2-occupied_corners[0][0] ][ 2-occupied_corners[0][1] ] = 1;
-		return;
-	}
-	// 3.2. play any corner:
-	if( free_corners.length > 0 ) {
-		console.log("play in corner");
-		let r = Math.floor( Math.random() * free_corners.length );
-		let corner = free_corners[r];
-		field[ corner[0] ][ corner[1] ] = 1;
+	if( play_pos != null ) {
+		game.field[ play_pos[0] ][ play_pos[1] ] = 1;
+		game.round++;
+		game.game_state = calc_game_state(
+			game.field
+		);
 		return;
 	}
 	// this should never happen:
@@ -313,12 +345,20 @@ function draw_field(
 		cell_height = height / field_size.row_count,
 		ctx = el.getContext('2d')
 	;
+	ctx.fillStyle = "blue";
+	// clear canvas:
+	ctx.clearRect(
+		0, 0,
+		width,
+		height
+	);
 
 	// draw grid:
 	ctx.fillStyle = "white";
 	ctx.strokeStyle = "#000";
 	ctx.lineWidth = 5;
 	for( let row_i=0; row_i<field_size.row_count; row_i++ ) {
+		ctx.beginPath();
 		ctx.moveTo(
 			0, cell_height * (row_i+1)
 		);
@@ -328,6 +368,7 @@ function draw_field(
 		ctx.stroke();
 	}
 	for( let col_i=0; col_i<field_size.col_count; col_i++ ) {
+		ctx.beginPath();
 		ctx.moveTo(
 			cell_width * (col_i+1), 0
 		);
@@ -380,6 +421,9 @@ function draw_field(
 	}
 
 	// draw crosses / circles:
+	ctx.fillStyle = "white";
+	ctx.strokeStyle = "#000";
+	ctx.lineWidth = 5;
 	let border_width = cell_width * 0.1;
 	let border_height = cell_height * 0.1;
 	for( let row_i=0; row_i<field_size.row_count; row_i++ ) {
