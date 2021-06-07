@@ -1,5 +1,7 @@
 # Tic Tac Toe in JavaScript
 
+![Screenshot of the Game](screenshot.png)
+
 ## How to run it
 
 simple clone this repository into some local directory:
