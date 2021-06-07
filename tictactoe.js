@@ -8,7 +8,14 @@
 let field = init_game(3,3);
 let container = document.querySelector("#game-container");
 pc_move( field );
-draw_field( container, field );
+{
+	let game_state = calc_game_state( field );
+	draw_game(
+		container,
+		field,
+		game_state
+	);
+}
 container.addEventListener(
 	"click",
 	function(event) {
@@ -40,6 +47,7 @@ function init_game(width, height) {
 }
 
 function draw_game(
+	el,
 	field,
 	game_state
 ) {
@@ -50,12 +58,12 @@ function draw_game(
 			);
 		}
 		draw_field(
-			event.target,
+			el,
 			field,
 			marks
 		);
 		draw_game_over(
-			event.target,
+			el,
 			field,
 			game_state
 		);
@@ -82,6 +90,7 @@ function player_click( event, field) {
 			return;
 		let game_state = calc_game_state( field );
 		draw_game(
+			event.target,
 			field,
 			game_state
 		);
@@ -94,6 +103,7 @@ function player_click( event, field) {
 	{
 		let game_state = calc_game_state( field );
 		draw_game(
+			event.target,
 			field,
 			game_state
 		);
