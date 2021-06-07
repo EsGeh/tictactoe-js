@@ -1,0 +1,28 @@
+* {
+	margin: 0;
+	border: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	height: 100%;
+}
+
+body {
+	background-color: black;
+	height: 100%;
+
+	display: flex;
+	justify-content: center;
+
+	/* border: solid 1px red; */
+}
+
+.white-rect {
+	margin: auto;
+	width: 500px;
+	height: 500px;
+
+	background-color: white;
+}
