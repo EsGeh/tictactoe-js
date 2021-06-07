@@ -97,9 +97,6 @@ function player_click( event, field) {
 			field,
 			game_state
 		);
-		if( game_state.type != "continue" ) {
-			return;
-		}
 	}
 }
 
