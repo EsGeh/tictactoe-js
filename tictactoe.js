@@ -12,7 +12,7 @@ draw_field( container, field );
 container.addEventListener(
 	"click",
 	function(event) {
-		player_move( event, field );
+		player_click( event, field );
 	}
 );
 
@@ -39,29 +39,10 @@ function init_game(width, height) {
 	return field;
 }
 
-function player_move( event, field) {
-	// player 2 moves (human player):
-	let game_pos = screen_pos_to_game_pos(
-		field,
-		event.target.width, event.target.height,
-		event.offsetX, event.offsetY
-	);
-	let
-		game_pos_x = game_pos[0],
-		game_pos_y = game_pos[1]
-	;
-	if( field[game_pos_y][game_pos_x] == 0 ) {
-		field[game_pos_y][game_pos_x] = 2;
-	}
-	else {
-		return;
-	}
-	{
-		let game_state = is_game_over( field );
-		/*
-		console.log( "game_state:" );
-		console.log( game_state );
-		*/
+function draw_game(
+	field,
+	game_state
+) {
 		let marks = [];
 		if( game_state.type == "victory" ) {
 			marks.push(
@@ -78,27 +59,60 @@ function player_move( event, field) {
 			field,
 			game_state
 		);
+}
+
+function player_click( event, field) {
+	// if game over -> leave this function:
+	{
+		let game_state = calc_game_state(
+			field
+		);
+		if( game_state.type != "continue" ) {
+			return;
+		}
+	}
+	// player 2 moves (human player):
+	{
+		let play_pos = screen_pos_to_game_pos(
+			field,
+			event.target.width, event.target.height,
+			event.offsetX, event.offsetY
+		);
+		if( player_move( field, play_pos ) )
+			return;
+		let game_state = calc_game_state( field );
+		draw_game(
+			field,
+			game_state
+		);
+		if( game_state.type != "continue" ) {
+			return;
+		}
 	}
 	// player 1 moves (pc):
 	pc_move( field );
 	{
-		let game_state = is_game_over( field );
-		let marks = [];
-		if( game_state.type == "victory" ) {
-			marks.push(
-				game_state.constellation
-			);
-		}
-		draw_field(
-			event.target,
-			field,
-			marks
-		);
-		draw_game_over(
-			event.target,
+		let game_state = calc_game_state( field );
+		draw_game(
 			field,
 			game_state
 		);
+		if( game_state.type != "continue" ) {
+			return;
+		}
+	}
+}
+
+function player_move(
+	field,
+	play_pos
+) {
+	if( field[ play_pos[0] ][ play_pos[1] ] == 0 ) {
+		field[ play_pos[0] ][ play_pos[1] ] = 2;
+		return 0;
+	}
+	else {
+		return 1;
 	}
 }
 
@@ -216,7 +230,7 @@ function pc_move( field ) {
 	console.log( "no strategy found! ");
 }
 
-function is_game_over( field ) {
+function calc_game_state( field ) {
 	let game_state = scan_lines(
 		field,
 		function( line, type) {
@@ -623,5 +637,5 @@ function screen_pos_to_game_pos(
 		game_pos_x = Math.floor( x / cell_width ),
 		game_pos_y = Math.floor( y / cell_height )
 	;
-	return [game_pos_x, game_pos_y];
+	return [game_pos_y, game_pos_x];
 }
