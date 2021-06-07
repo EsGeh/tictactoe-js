@@ -56,9 +56,23 @@ function player_move( event, field) {
 	else {
 		return;
 	}
-	draw_field( event.target, field );
 	{
 		let game_state = is_game_over( field );
+		/*
+		console.log( "game_state:" );
+		console.log( game_state );
+		*/
+		let marks = [];
+		if( game_state.type == "victory" ) {
+			marks.push(
+				game_state.constellation
+			);
+		}
+		draw_field(
+			event.target,
+			field,
+			marks
+		);
 		draw_game_over(
 			event.target,
 			field,
@@ -67,9 +81,19 @@ function player_move( event, field) {
 	}
 	// player 1 moves (pc):
 	pc_move( field );
-	draw_field( event.target, field );
 	{
 		let game_state = is_game_over( field );
+		let marks = [];
+		if( game_state.type == "victory" ) {
+			marks.push(
+				game_state.constellation
+			);
+		}
+		draw_field(
+			event.target,
+			field,
+			marks
+		);
 		draw_game_over(
 			event.target,
 			field,
@@ -193,9 +217,9 @@ function pc_move( field ) {
 }
 
 function is_game_over( field ) {
-	let winner = scan_lines(
+	let game_state = scan_lines(
 		field,
-		function( line ) {
+		function( line, type) {
 			let player_1_counter = 0;
 			let player_2_counter = 0;
 			for( let cell of line ) {
@@ -207,16 +231,31 @@ function is_game_over( field ) {
 				}
 			}
 			if( player_1_counter >= 3 ) {
-				return 1;
+				return {
+					type: "victory",
+					player: 1,
+					constellation: {
+						type: type,
+						line: line
+					}
+				};
 			}
 			else if( player_2_counter >= 3 ) {
-				return 2;
+				return {
+					type: "victory",
+					player: 2,
+					constellation: {
+						type: type,
+						line: line
+					}
+				};
 			}
-			return 0;
-		}
+			return null;
+		},
+		null
 	);
-	if( winner != 0 ) {
-		return winner;
+	if( game_state != null ) {
+		return game_state;
 	}
 	// no one has won, but game finished?
 	let field_full = true;
@@ -227,13 +266,21 @@ function is_game_over( field ) {
 		}
 	}
 	if( field_full ) {
-		return 3;
+		return {
+			type: "game over"
+		}
 	}
-	return 0;
+	return {
+		type: "continue"
+	}
 }
 
 // draw game onto a canvas element
-function draw_field( el, field ) {
+function draw_field(
+	el,
+	field,
+	marks = []
+) {
 	if (!el.getContext) {
 		return;
 	}
@@ -246,6 +293,7 @@ function draw_field( el, field ) {
 		ctx = el.getContext('2d')
 	;
 
+	// draw grid:
 	ctx.fillStyle = "white";
 	ctx.strokeStyle = "#000";
 	ctx.lineWidth = 5;
@@ -267,6 +315,50 @@ function draw_field( el, field ) {
 		);
 		ctx.stroke();
 	}
+	// draw marks:
+	ctx.strokeStyle = "red";
+	ctx.lineWidth = 5;
+	for( let mark of marks ) {
+		switch( mark.type ) {
+			case "row":
+			case "col":
+				let rect = {
+					x: mark.line[0].pos[1] * cell_width + 2.5,
+					y: mark.line[0].pos[0] * cell_height + 2.5,
+					width: (mark.line[2].pos[1] - mark.line[0].pos[1] + 1) * cell_width - 7.5,
+					height: (mark.line[2].pos[0] - mark.line[0].pos[0] + 1) * cell_height - 7.5
+				};
+				ctx.strokeRect(
+					rect.x, rect.y,
+					rect.width, rect.height
+				);
+			break;
+			case "diag_lr":
+				ctx.rotate(2 * Math.PI / 8);
+				ctx.strokeRect(
+					1/3 * cell_width + 2.5,
+					- cell_height/3 + 2.5,
+					Math.sqrt( 2 ) * width - 2/3 * cell_width - 7.5,
+					cell_height * 2 / 3
+				);
+				ctx.rotate(-2 * Math.PI / 8);
+			break;
+			case "diag_rl":
+				ctx.translate( 0, height );
+				ctx.rotate(-2 * Math.PI / 8);
+				ctx.strokeRect(
+					1/3 * cell_width + 2.5,
+					- cell_height/3 + 2.5,
+					Math.sqrt( 2 ) * width - 2/3 * cell_width - 7.5,
+					cell_height * 2 / 3
+				);
+				ctx.rotate(2 * Math.PI / 8);
+				ctx.translate( 0, -height );
+			break;
+		}
+	}
+
+	// draw crosses / circles:
 	let border_width = cell_width * 0.1;
 	let border_height = cell_height * 0.1;
 	for( let row_i=0; row_i<field_size.row_count; row_i++ ) {
@@ -302,17 +394,18 @@ function draw_game_over(
 	game_state
 ) {
 	let text = null;
-	switch( game_state ) {
-		case 1:
-			text = "YOU LOOSE!";
-		break;
-		case 2:
+	let marks = [];
+	if( game_state.type == "victory" ) {
+		if( game_state.player == 1 ) {
+			text = "YOU LOSE!";
+		}
+		else {
 			text = "YOU WIN!";
-		break;
-		case 3:
-			text = "GAME OVER";
-		break;
-	};
+		}
+	}
+	if( game_state.type == "game over" ) {
+		text = "GAME OVER";
+	}
 	if( text != null ) {
 		draw_text(
 			el,
@@ -424,7 +517,8 @@ function scan_lines(
 			});
 		}
 		let row_res = func(
-			line_content
+			line_content,
+			"row"
 		);
 		if( row_res ) {
 			return row_res;
@@ -441,7 +535,8 @@ function scan_lines(
 			});
 		}
 		let row_res = func(
-			line_content
+			line_content,
+			"col"
 		);
 		if( row_res ) {
 			return row_res;
@@ -482,7 +577,8 @@ function scan_diagonals(
 			});
 		}
 		let row_res = func(
-			line_content
+			line_content,
+			"diag_lr"
 		);
 		if( row_res ) {
 			return row_res;
@@ -503,7 +599,8 @@ function scan_diagonals(
 			});
 		}
 		let row_res = func(
-			line_content
+			line_content,
+			"diag_rl"
 		);
 		if( row_res ) {
 			return row_res;
